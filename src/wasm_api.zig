@@ -130,11 +130,21 @@ fn getSfinderOffset(kind: PieceKind, facing: Facing) struct { x: i32, y: i32 } {
     // sfinder expects x=0, y=1 (the rotation center row)
     // So offset should be (0, -1)
 
-    // For now, return zero offsets to see the raw canonical position output
-    // This will help determine the correct offsets empirically
-    _ = kind;
-    _ = facing;
-    return .{ .x = 0, .y = 0 };
+    // Offsets determined empirically by comparing raw canonical positions to sfinder expected output
+    // Raw canonical outputs vs sfinder expected:
+    //   I-Right at cols 0-1: raw (0,2) & (1,2) → expected (0,1) & (1,1) → offset (0,-1)
+    //   I-Right at cols 8-9: raw (8,2) & (9,2) → expected (8,1) & (9,1) → offset (0,-1)
+    //   I-Spawn horizontal: raw (4,0) → expected (4,0) → offset (0,0)
+    return switch (kind) {
+        .i => switch (facing) {
+            .up => .{ .x = 0, .y = 0 },      // Spawn: horizontal, no offset needed
+            .right => .{ .x = 0, .y = -1 },  // Right: vertical, y needs -1
+            .down => .{ .x = 0, .y = 0 },    // Reverse: horizontal
+            .left => .{ .x = 0, .y = -1 },   // Left: vertical, same as Right
+        },
+        // O, T, S, Z, L, J: no offset needed based on testing
+        else => .{ .x = 0, .y = 0 },
+    };
 }
 
 /// Main PC solver function - exported to WASM
