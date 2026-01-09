@@ -304,3 +304,78 @@ export fn alloc(len: u32) ?[*]u8 {
 export fn dealloc(ptr: [*]u8, len: u32) void {
     allocator.free(ptr[0..len]);
 }
+
+/// Fast PC possibility check - returns 1 if PC is possible, 0 if not
+/// This is much faster than findPath since it doesn't format output
+/// Use this for real-time validation during gameplay
+export fn checkPCPossible(
+    field_ptr: [*]const u8,
+    field_len: u32,
+    pieces_ptr: [*]const u8,
+    pieces_len: u32,
+    height: u32,
+) u32 {
+    // Parse field
+    const playfield = parseField(field_ptr, field_len, height);
+
+    // Parse pieces into queue
+    const pieces = pieces_ptr[0..pieces_len];
+    var queue: [16]PieceKind = undefined;
+    var queue_len: usize = 0;
+
+    for (pieces) |c| {
+        if (parsePiece(c)) |piece| {
+            if (queue_len < 16) {
+                queue[queue_len] = piece;
+                queue_len += 1;
+            }
+        }
+    }
+
+    // Need at least 2 pieces
+    if (queue_len < 2) {
+        return 0;
+    }
+
+    // Create game state
+    var game: GameState(engine.bags.SevenBag) = .init(
+        engine.bags.SevenBag.init(0),
+        &engine.kicks.srsPlus,
+    );
+    game.playfield = playfield;
+    game.hold_kind = queue[0];
+    game.current.kind = queue[1];
+
+    const next_count = @min(queue_len - 2, game.next_pieces.len);
+    for (0..next_count) |i| {
+        game.next_pieces[i] = queue[i + 2];
+    }
+
+    game.bag.context.index = 0;
+    if (queue_len > 9) {
+        for (0..queue_len - 9) |i| {
+            game.bag.context.pieces[i] = queue[i + 9];
+        }
+    }
+
+    // Load NN
+    const nn = pt.defaultNN(allocator) catch return 0;
+    defer nn.deinit(allocator);
+
+    const max_placements = @min(queue_len, height * 10 / 4);
+
+    // Try to find PC - we only care if it succeeds
+    const solution = pt.findPcAuto(
+        engine.bags.SevenBag,
+        allocator,
+        game,
+        nn,
+        @intCast(height),
+        max_placements,
+        null,
+    ) catch return 0;
+
+    // Free solution and return success
+    allocator.free(solution);
+    return 1;
+}
