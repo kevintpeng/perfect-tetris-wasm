@@ -73,11 +73,15 @@ fn formatPlacement(buf: []u8, placement: pt.Placement) ![]const u8 {
         .l => 'L',
         .j => 'J',
     };
+    // Map Zig facing to sfinder rotation names
+    // Note: Zig's coordinate system is mirrored from sfinder's, so:
+    //   Zig .right (CW) visually matches sfinder "Left" (CCW)
+    //   Zig .left (CCW) visually matches sfinder "Right" (CW)
     const rotation: []const u8 = switch (placement.piece.facing) {
         .up => "Spawn",
-        .right => "Right",
+        .right => "Left",    // Zig right maps to sfinder Left
         .down => "Reverse",
-        .left => "Left",
+        .left => "Right",    // Zig left maps to sfinder Right
     };
 
     // Get the canonical position (absolute board position)
@@ -131,16 +135,16 @@ fn getSfinderOffset(kind: PieceKind, facing: Facing) struct { x: i32, y: i32 } {
     // So offset should be (0, -1)
 
     // Offsets determined empirically by comparing raw canonical positions to sfinder expected output
+    // Note: Zig .right maps to sfinder "Left" and vice versa (coordinate system mirroring)
     // Raw canonical outputs vs sfinder expected:
-    //   I-Right at cols 0-1: raw (0,2) & (1,2) → expected (0,1) & (1,1) → offset (0,-1)
-    //   I-Right at cols 8-9: raw (8,2) & (9,2) → expected (8,1) & (9,1) → offset (0,-1)
+    //   I (Zig .right → sfinder Left) at cols 0-1: raw (0,2) & (1,2) → expected (0,1) & (1,1) → offset (0,-1)
     //   I-Spawn horizontal: raw (4,0) → expected (4,0) → offset (0,0)
     return switch (kind) {
         .i => switch (facing) {
             .up => .{ .x = 0, .y = 0 },      // Spawn: horizontal, no offset needed
-            .right => .{ .x = 0, .y = -1 },  // Right: vertical, y needs -1
+            .right => .{ .x = 0, .y = -1 },  // Zig right (sfinder Left): vertical, y needs -1
             .down => .{ .x = 0, .y = 0 },    // Reverse: horizontal
-            .left => .{ .x = 0, .y = -1 },   // Left: vertical, same as Right
+            .left => .{ .x = 0, .y = -1 },   // Zig left (sfinder Right): vertical, y needs -1
         },
         // O, T, S, Z, L, J: no offset needed based on testing
         else => .{ .x = 0, .y = 0 },
@@ -254,7 +258,7 @@ export fn findPath(
     var fbs = std.io.fixedBufferStream(&output_buffer);
     var writer = fbs.writer();
 
-    writer.writeAll("{\"success\":true,\"solutions\":[{\"placements\":[") catch {
+    writer.writeAll("{\"success\":true,\"solutions\":[{\"patternSize\":1,\"placements\":[") catch {
         const err = "{\"success\":false,\"error\":\"Buffer overflow\"}";
         @memcpy(output_buffer[0..err.len], err);
         output_buffer[err.len] = 0;
