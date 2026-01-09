@@ -118,16 +118,38 @@ export fn findPath(
         return &output_buffer;
     }
 
+    // Need at least 2 pieces (hold + current)
+    if (queue_len < 2) {
+        const err = "{\"success\":false,\"error\":\"Need at least 2 pieces\"}";
+        @memcpy(output_buffer[0..err.len], err);
+        output_buffer[err.len] = 0;
+        return &output_buffer;
+    }
+
     // Create game state with the pieces
-    // Using SevenBag as placeholder - we'll manually set the queue
+    // Following the same pattern as solve.zig's gameWithPieces
     var game: GameState(engine.bags.SevenBag) = .init(
         engine.bags.SevenBag.init(0),
         &engine.kicks.srsPlus,
     );
     game.playfield = playfield;
-    game.current.kind = queue[0];
-    if (queue_len > 1) {
-        game.hold_kind = queue[1];
+
+    // First piece goes to hold, second is current
+    game.hold_kind = queue[0];
+    game.current.kind = queue[1];
+
+    // Fill next preview (pieces starting at index 2)
+    const next_count = @min(queue_len - 2, game.next_pieces.len);
+    for (0..next_count) |i| {
+        game.next_pieces[i] = queue[i + 2];
+    }
+
+    // Set up bag context for pieces beyond the preview
+    game.bag.context.index = 0;
+    if (queue_len > 9) {
+        for (0..queue_len - 9) |i| {
+            game.bag.context.pieces[i] = queue[i + 9];
+        }
     }
 
     // Try to find PC
