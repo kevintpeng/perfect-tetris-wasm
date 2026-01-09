@@ -68,10 +68,10 @@ fn formatPlacement(buf: []u8, placement: pt.Placement) ![]const u8 {
         .j => 'J',
     };
     const rotation: []const u8 = switch (placement.piece.facing) {
-        .north => "Spawn",
-        .east => "Right",
-        .south => "Reverse",
-        .west => "Left",
+        .up => "Spawn",
+        .right => "Right",
+        .down => "Reverse",
+        .left => "Left",
     };
 
     var fbs = std.io.fixedBufferStream(buf);
