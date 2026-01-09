@@ -120,11 +120,14 @@ export fn findPath(
 
     // Create game state with the pieces
     // Using SevenBag as placeholder - we'll manually set the queue
-    var game = GameState(engine.bags.SevenBag).init(0);
+    var game: GameState(engine.bags.SevenBag) = .init(
+        engine.bags.SevenBag.init(0),
+        &engine.kicks.srsPlus,
+    );
     game.playfield = playfield;
-    game.current = queue[0];
+    game.current.kind = queue[0];
     if (queue_len > 1) {
-        game.hold_piece = queue[1];
+        game.hold_kind = queue[1];
     }
 
     // Try to find PC
