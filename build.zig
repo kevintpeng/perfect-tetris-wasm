@@ -19,6 +19,7 @@ pub fn build(b: *Build) void {
     benchStep(b, target);
     trainStep(b, target, optimize);
     releaseStep(b);
+    wasmStep(b);
 }
 
 const Dependency = enum {
@@ -282,4 +283,36 @@ fn releaseStep(b: *Build) void {
 
     const checksums = b.addInstallFile(hashFiles(b, files.items), "release/sha256.txt");
     step.dependOn(&checksums.step);
+}
+
+fn wasmStep(b: *Build) void {
+    const wasm_target = b.resolveTargetQuery(Build.parseTargetQuery(.{
+        .arch_os_abi = "wasm32-freestanding",
+    }) catch unreachable);
+
+    // Create the WASM module with embedded dependencies
+    const wasm_mod = b.createModule(.{
+        .root_source_file = b.path("src/wasm_api.zig"),
+        .target = wasm_target,
+        .optimize = .ReleaseSmall,
+    });
+
+    // Add the perfect-tetris library as import
+    wasm_mod.addImport("perfect-tetris", libModule(b, wasm_target, .ReleaseSmall));
+    importDependencies(wasm_mod, &.{ .engine, .zmai }, wasm_target, .ReleaseSmall);
+
+    const wasm = b.addExecutable(.{
+        .name = "pc-solver",
+        .root_module = wasm_mod,
+    });
+    wasm.entry = .disabled;
+    wasm.rdynamic = true;
+    wasm.root_module.strip = true;
+
+    const install = b.addInstallArtifact(wasm, .{
+        .dest_dir = .{ .override = .{ .custom = "wasm" } },
+    });
+
+    const step = b.step("wasm", "Build WebAssembly module for browser");
+    step.dependOn(&install.step);
 }
