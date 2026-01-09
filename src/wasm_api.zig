@@ -34,7 +34,7 @@ fn parsePiece(c: u8) ?PieceKind {
 
 /// Parse field string (X=filled, _=empty) to BoardMask
 /// Field string is expected in reading order: first char is top-left (row height-1, col 0)
-/// Engine BoardMask uses bit positions 1-10 for columns 0-9 (with padding at bits 0 and 11-15)
+/// Engine BoardMask bit layout: x=0 is bit 10, x=9 is bit 1 (bits 11-15 and bit 0 are padding)
 fn parseField(field_ptr: [*]const u8, field_len: u32, height: u32) BoardMask {
     var mask = BoardMask{};
     const field = field_ptr[0..field_len];
@@ -45,10 +45,10 @@ fn parseField(field_ptr: [*]const u8, field_len: u32, height: u32) BoardMask {
     for (field) |c| {
         if (c == 'X' or c == 'x') {
             if (y < BoardMask.HEIGHT) {
-                // Engine BoardMask uses bit positions 1-10 for columns 0-9
-                // Bit 0 and bits 11-15 are padding (always 1 in EMPTY_ROW)
-                // So column 0 = bit 1, column 9 = bit 10
-                mask.rows[y] |= @as(u16, 1) << @intCast(x + 1);
+                // Engine BoardMask: x=0 is bit 10, x=9 is bit 1
+                // Formula: bit_position = WIDTH - x = 10 - x
+                const bit_pos: u4 = @intCast(10 - x);
+                mask.rows[y] |= @as(u16, 1) << bit_pos;
             }
         }
         x += 1;
