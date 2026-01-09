@@ -181,7 +181,7 @@ export fn findPath(
         writer.writeAll(placement_json) catch break;
     }
 
-    writer.print("]}],\"solutionCount\":1}}", .{}) catch {
+    writer.writeAll("]}],\"solutionCount\":1}") catch {
         const err = "{\"success\":false,\"error\":\"Buffer overflow\"}";
         @memcpy(output_buffer[0..err.len], err);
         output_buffer[err.len] = 0;
