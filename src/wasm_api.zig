@@ -258,7 +258,7 @@ export fn findPath(
     var fbs = std.io.fixedBufferStream(&output_buffer);
     var writer = fbs.writer();
 
-    writer.writeAll("{\"success\":true,\"solutions\":[{\"patternSize\":1,\"placements\":[") catch {
+    writer.print("{{\"success\":true,\"solutions\":[{{\"patternSize\":{d},\"placements\":[", .{solution.len}) catch {
         const err = "{\"success\":false,\"error\":\"Buffer overflow\"}";
         @memcpy(output_buffer[0..err.len], err);
         output_buffer[err.len] = 0;
