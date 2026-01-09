@@ -161,13 +161,18 @@ export fn findPath(
     };
     defer nn.deinit(allocator);
 
+    // max_len is the maximum number of placements in a solution
+    // For a 4-line PC, you need at most height * 10 / 4 = 10 placements
+    // But we can only use as many pieces as we have in the queue
+    const max_placements = @min(queue_len, height * 10 / 4);
+
     const solution = pt.findPcAuto(
         engine.bags.SevenBag,
         allocator,
         game,
         nn,
         @intCast(height),
-        queue_len,
+        max_placements,
         null,
     ) catch |e| {
         var fbs = std.io.fixedBufferStream(&output_buffer);
