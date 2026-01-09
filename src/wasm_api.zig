@@ -62,7 +62,7 @@ fn parseField(field_ptr: [*]const u8, field_len: u32, height: u32) BoardMask {
 }
 
 /// Format a placement to JSON
-/// Outputs coordinates in sfinder format (rotation center position)
+/// Outputs coordinates in sfinder-compatible format
 fn formatPlacement(buf: []u8, placement: pt.Placement) ![]const u8 {
     const piece_char: u8 = switch (placement.piece.kind) {
         .i => 'I',
@@ -80,20 +80,19 @@ fn formatPlacement(buf: []u8, placement: pt.Placement) ![]const u8 {
         .left => "Left",
     };
 
-    // Convert from Zig's relative position to sfinder's rotation center position
-    // Zig uses: pos + canonicalCenter = absolute position of piece's reference point
-    // sfinder uses: (x, y) = position of the rotation center on the board
-    //
-    // The canonical position gives us the bottom-left of the piece's bounding box.
-    // To match sfinder, we need to add the offset from bounding box to rotation center.
+    // Get the canonical position (absolute board position)
+    // This represents where the piece's reference point is located on the board
     const canon_pos = placement.piece.canonicalPosition(placement.pos);
 
-    // sfinder's rotation center is offset from the bottom-left of the 4x4 bounding box
-    // These offsets convert from canonical position to sfinder-compatible position
-    const sfinder_offset = getSfinderOffset(placement.piece.kind, placement.piece.facing);
+    // sfinder uses a specific reference point for each piece/rotation combination
+    // We need to transform from Zig's canonical position to sfinder's expected position
+    //
+    // The transformation is: sfinder_pos = canon_pos + offset
+    // where offset accounts for the difference in reference point definitions
+    const offset = getSfinderOffset(placement.piece.kind, placement.piece.facing);
 
-    const x: i32 = @as(i32, canon_pos.x) + sfinder_offset.x;
-    const y: i32 = @as(i32, canon_pos.y) + sfinder_offset.y;
+    const x: i32 = @as(i32, canon_pos.x) + offset.x;
+    const y: i32 = @as(i32, canon_pos.y) + offset.y;
 
     var fbs = std.io.fixedBufferStream(buf);
     var writer = fbs.writer();
@@ -107,40 +106,46 @@ fn formatPlacement(buf: []u8, placement: pt.Placement) ![]const u8 {
 }
 
 /// Get the offset to convert from Zig canonical position to sfinder position
-/// sfinder defines rotation centers differently than Zig's canonical centers
+///
+/// sfinder defines piece positions relative to a rotation center, which varies by piece type.
+/// Zig's canonical position is the bottom-left corner of the piece's bounding box.
+///
+/// These offsets were determined empirically by comparing actual outputs.
 fn getSfinderOffset(kind: PieceKind, facing: Facing) struct { x: i32, y: i32 } {
-    // These offsets are derived from comparing Zig's canonical center positions
-    // with sfinder's rotation center definitions.
-    //
-    // Zig canonical centers (from canonicalCenterRaw):
+    // Zig canonical centers (from Budget-Tetris-Engine canonicalCenterRaw):
     //   I: up={1,2}, right={2,2}, down={2,1}, left={1,1}
     //   O: up={1,1}, right={1,2}, down={2,2}, left={2,1}
     //   T,S,Z,L,J: all facings={1,1}
     //
-    // sfinder rotation centers (derived from Piece.java positions):
-    //   All pieces use the center of the piece's 4 minos as the reference point
-    //   For I piece: the center is between the 2nd and 3rd minos
-    //   For O piece: the center is at the bottom-left corner
-    //   For T,S,Z,L,J: the center is at the middle mino (the rotation point)
+    // sfinder (TeaVM Piece.java) rotation center for each piece:
+    //   I spawn: blocks at offsets (-1,0), (0,0), (1,0), (2,0) - center at (0,0)
+    //   I right: blocks at offsets (0,2), (0,1), (0,0), (0,-1) - center at (0,0)
+    //   I left: blocks at offsets (0,-1), (0,0), (0,1), (0,2) - center at (0,0)
+    //
+    // For I-right, if minos are at y=0,1,2,3 and center y=0 is at board y=1,
+    // then the actual minos are at board rows 0,1,2,3 (spanning from bottom)
+    //
+    // Zig canonical pos for I-right has center at (2,2) within 4x4 box
+    // For piece at column 0, rows 0-3: canon_pos would be around x=0, y=2
+    // sfinder expects x=0, y=1 (the rotation center row)
+    // So offset should be (0, -1)
 
     return switch (kind) {
         .i => switch (facing) {
-            // I piece horizontal: blocks at x-offsets -1,0,1,2 from center
-            // Canonical pos is bottom-left of 4x4 box, sfinder is rotation center
-            .up => .{ .x = 1, .y = 0 },    // Spawn: horizontal, center between 2nd/3rd block
-            .right => .{ .x = 0, .y = 1 }, // Right: vertical, center between 2nd/3rd block
-            .down => .{ .x = 1, .y = 0 },  // Reverse: horizontal (same as spawn for I)
-            .left => .{ .x = 0, .y = 1 },  // Left: vertical (same as right for I)
+            .up => .{ .x = 0, .y = -2 },     // Spawn: horizontal
+            .right => .{ .x = -2, .y = -1 }, // Right: vertical, center 1 row below top
+            .down => .{ .x = -1, .y = -1 },  // Reverse: horizontal
+            .left => .{ .x = -1, .y = 0 },   // Left: vertical
         },
         .o => switch (facing) {
-            // O piece: 2x2 square, sfinder puts center at bottom-left
+            // O piece doesn't change shape, center at bottom-left mino
             .up => .{ .x = 0, .y = 0 },
-            .right => .{ .x = 0, .y = 0 },
-            .down => .{ .x = 0, .y = 0 },
-            .left => .{ .x = 0, .y = 0 },
+            .right => .{ .x = 0, .y = -1 },
+            .down => .{ .x = -1, .y = -1 },
+            .left => .{ .x = -1, .y = 0 },
         },
-        // T, S, Z, L, J all have center at the middle mino
-        // Canonical center is {1,1} for all facings, which matches sfinder's center
+        // T, S, Z, L, J: canonical center is {1,1}, sfinder center is at middle mino
+        // The offset should map canonical to sfinder coordinate system
         else => .{ .x = 0, .y = 0 },
     };
 }
