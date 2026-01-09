@@ -130,26 +130,11 @@ fn getSfinderOffset(kind: PieceKind, facing: Facing) struct { x: i32, y: i32 } {
     // sfinder expects x=0, y=1 (the rotation center row)
     // So offset should be (0, -1)
 
-    // Offsets empirically determined by comparing WASM output to sfinder/TeaVM output
-    // Test case: columns 0-1 empty, I-Right should produce x=0,1 y=1
-    // WASM raw canonical produces x=-1,-2 y=1, so we need x offset of +2
-    return switch (kind) {
-        .i => switch (facing) {
-            .up => .{ .x = 0, .y = 0 },      // Spawn: horizontal
-            .right => .{ .x = 2, .y = -1 },  // Right: vertical (+2 to x based on testing)
-            .down => .{ .x = 1, .y = 0 },    // Reverse: horizontal
-            .left => .{ .x = 1, .y = -1 },   // Left: vertical
-        },
-        .o => switch (facing) {
-            // O piece: 2x2 square
-            .up => .{ .x = 0, .y = 0 },
-            .right => .{ .x = 0, .y = 0 },
-            .down => .{ .x = 0, .y = 0 },
-            .left => .{ .x = 0, .y = 0 },
-        },
-        // T, S, Z, L, J: canonical center is {1,1}, sfinder center is at middle mino
-        else => .{ .x = 0, .y = 0 },
-    };
+    // For now, return zero offsets to see the raw canonical position output
+    // This will help determine the correct offsets empirically
+    _ = kind;
+    _ = facing;
+    return .{ .x = 0, .y = 0 };
 }
 
 /// Main PC solver function - exported to WASM
